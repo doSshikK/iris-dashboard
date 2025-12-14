@@ -118,35 +118,6 @@ if page == " Визуализация данных":
         st.metric("Всего пропусков", int(df_filtered.isna().sum().sum()))
         st.metric("Колонок с пропусками", int((df_filtered.isna().sum() > 0).sum()))
 
-    # Информация о датасете
-    st.subheader("📋 Информация о датасете (df.info)")
-    
-    # Создаем таблицу как в df.info()
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        st.markdown("**Структура данных:**")
-        info_data = []
-        for i, col in enumerate(df_filtered.columns):
-            info_data.append({
-                '#': i,
-                'Колонка': col,
-                'Non-Null Count': df_filtered[col].count(),
-                'Dtype': str(df_filtered[col].dtype)
-            })
-        
-        info_df = pd.DataFrame(info_data)
-        st.dataframe(info_df[['#', 'Колонка', 'Non-Null Count', 'Dtype']], 
-                     hide_index=True, use_container_width=True)
-    
-    with col2:
-        st.markdown("**Основные метрики:**")
-        st.metric("Всего строк", f"{df_filtered.shape[0]}")
-        st.metric("Всего колонок", f"{df_filtered.shape[1]}")
-        
-        memory_kb = df_filtered.memory_usage(deep=True).sum() / 1024
-        st.metric("Память", f"{memory_kb:.1f} KB")
-
         # Описание колонок
     st.subheader("📝 Описание колонок")
     

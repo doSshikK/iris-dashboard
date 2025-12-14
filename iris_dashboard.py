@@ -107,32 +107,16 @@ if page == " Визуализация данных":
     with col_k4:
         st.metric("Дубликатов", int(df_filtered.duplicated().sum()))
 
-        # Проверка качества данных: пропуски и дубликаты
-    st.subheader("📌 Качество данных")
-    
-    # Правильный подсчет
-    total_duplicates = df_filtered.duplicated().sum()  # ТОЛЬКО ПОЛНЫЕ ДУБЛИКАТЫ СТРОК
-    total_missing = df_filtered.isna().sum().sum()
-    
+# Дополнительные KPI: пропуски
+    st.subheader("📌 Пропуски и качество данных")
     col_a, col_b = st.columns([2, 1])
-    
     with col_a:
-        # Только пропуски (дубликаты не по колонкам, а общие)
         missing_by_col = df_filtered.isna().sum()
-        quality_df = pd.DataFrame({
-            'Колонка': missing_by_col.index,
-            'Пропуски': missing_by_col.values,
-            'Тип данных': df_filtered.dtypes.values
-        })
-        st.dataframe(quality_df, use_container_width=True)
-        
-        if total_duplicates > 0:
-            st.warning(f"Найдено {total_duplicates} полных дубликатов строк")
-    
+        st.dataframe(pd.DataFrame({'Колонка': missing_by_col.index, 'Пропуски': missing_by_col.values}),
+                     use_container_width=True)
     with col_b:
-        st.metric("Всего пропусков", total_missing)
-        st.metric("Полных дубликатов", total_duplicates)  # Только полные копии строк
-        st.metric("Уникальных строк", df_filtered.shape[0] - total_duplicates)
+        st.metric("Всего пропусков", int(df_filtered.isna().sum().sum()))
+        st.metric("Колонок с пропусками", int((df_filtered.isna().sum() > 0).sum()))
 
         # Описание колонок
     st.subheader("📝 Описание колонок")

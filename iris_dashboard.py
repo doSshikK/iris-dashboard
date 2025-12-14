@@ -107,16 +107,27 @@ if page == " Визуализация данных":
     with col_k4:
         st.metric("Дубликатов", int(df_filtered.duplicated().sum()))
 
-# Дополнительные KPI: пропуски
-    st.subheader("📌 Пропуски и качество данных")
+    # Проверка качества данных: пропуски, дубликаты и уникальность
+    st.subheader("📌 Пропуски, дубликаты и уникальность")
     col_a, col_b = st.columns([2, 1])
+    
     with col_a:
         missing_by_col = df_filtered.isna().sum()
-        st.dataframe(pd.DataFrame({'Колонка': missing_by_col.index, 'Пропуски': missing_by_col.values}),
-                     use_container_width=True)
+        quality_df = pd.DataFrame({
+            'Колонка': missing_by_col.index,
+            'Пропуски': missing_by_col.values,
+            'Тип данных': df_filtered.dtypes.values
+        })
+        st.dataframe(quality_df, use_container_width=True)
+    
     with col_b:
-        st.metric("Всего пропусков", int(df_filtered.isna().sum().sum()))
-        st.metric("Колонок с пропусками", int((df_filtered.isna().sum() > 0).sum()))
+        total_missing = int(df_filtered.isna().sum().sum())
+        total_duplicates = int(df_filtered.duplicated().sum())
+        unique_rows = df_filtered.shape[0] - total_duplicates
+        
+        st.metric("Всего пропусков", total_missing)
+        st.metric("Всего дубликатов", total_duplicates)
+        st.metric("Уникальных строк", unique_rows)
 
         # Описание колонок
     st.subheader("📝 Описание колонок")

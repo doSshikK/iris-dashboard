@@ -179,30 +179,6 @@ if page == " Визуализация данных":
     else:
         st.warning("Нет числовых колонок для статистики")
 
-    # Дополнительно: KPI-карточки по каждому признаку
-    st.subheader("📌 Ключевые статистики по признакам")
-    
-    # Выбираем 4 признака (первые 4 колонки, обычно это числовые признаки ириса)
-    features_for_kpi = df_filtered.columns[:4] if len(df_filtered.columns) >= 4 else df_filtered.columns
-    
-    # Создаем колонки для карточек
-    cols = st.columns(len(features_for_kpi))
-    
-    for idx, feature in enumerate(features_for_kpi):
-        with cols[idx]:
-            if feature in df_filtered.columns:
-                # Основные метрики для каждого признака
-                st.metric(
-                    label=feature,
-                    value=f"{df_filtered[feature].mean():.2f}",
-                    delta=f"σ={df_filtered[feature].std():.2f}"
-                )
-                # Дополнительная информация под карточкой
-                with st.expander("Подробнее", expanded=False):
-                    st.write(f"**Медиана:** {df_filtered[feature].median():.2f}")
-                    st.write(f"**Минимум:** {df_filtered[feature].min():.2f}")
-                    st.write(f"**Максимум:** {df_filtered[feature].max():.2f}")
-
     # Кнопка скачать
     st.download_button(
         "⬇ Скачать данные (CSV)",

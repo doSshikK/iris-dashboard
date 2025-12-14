@@ -115,8 +115,7 @@ if page == " Визуализация данных":
         missing_by_col = df_filtered.isna().sum()
         quality_df = pd.DataFrame({
             'Колонка': missing_by_col.index,
-            'Пропуски': missing_by_col.values,
-            'Тип данных': df_filtered.dtypes.values
+            'Пропуски': missing_by_col.values
         })
         st.dataframe(quality_df, use_container_width=True)
     

@@ -197,9 +197,6 @@ if page == " Визуализация данных":
             'max': 'Максимум'
         })
         
-        # Добавляем тип данных
-        describe_df['Тип'] = df_filtered[numeric_cols].dtypes.values
-        
         # Показываем таблицу
         st.dataframe(describe_df, use_container_width=True)
     else:

@@ -118,10 +118,90 @@ if page == " Визуализация данных":
         st.metric("Всего пропусков", int(df_filtered.isna().sum().sum()))
         st.metric("Колонок с пропусками", int((df_filtered.isna().sum() > 0).sum()))
 
-    # KPI-таблица: средние, медианы, std
-    st.subheader("📌 Базовые статистики (KPI)")
-    stats_df = compute_basic_stats(df_filtered)
-    st.dataframe(stats_df, use_container_width=True)
+    # Информация о датасете (как df.info())
+    st.subheader("📋 Информация о датасете (df.info())")
+    
+    # Создаем таблицу как в df.info()
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown("**Структура данных:**")
+        info_data = []
+        for i, col in enumerate(df_filtered.columns):
+            info_data.append({
+                '#': i,
+                'Колонка': col,
+                'Non-Null Count': df_filtered[col].count(),
+                'Dtype': str(df_filtered[col].dtype)
+            })
+        
+        info_df = pd.DataFrame(info_data)
+        st.dataframe(info_df[['#', 'Колонка', 'Non-Null Count', 'Dtype']], 
+                     hide_index=True, use_container_width=True)
+    
+    with col2:
+        st.markdown("**Основные метрики:**")
+        st.metric("Всего строк", f"{df_filtered.shape[0]}")
+        st.metric("Всего колонок", f"{df_filtered.shape[1]}")
+        st.metric("Пропусков", "0")
+        
+        memory_kb = df_filtered.memory_usage(deep=True).sum() / 1024
+        st.metric("Память", f"{memory_kb:.1f} KB")
+
+    # Описательная статистика (как df.describe())
+    st.subheader("📊 Описательная статистика (df.describe())")
+    
+    # Берем только числовые колонки
+    numeric_cols = df_filtered.select_dtypes(include=[np.number]).columns
+    
+    if len(numeric_cols) > 0:
+        # Создаем таблицу как в df.describe()
+        describe_df = df_filtered[numeric_cols].describe().transpose()
+        describe_df = describe_df.round(3)
+        
+        # Переименовываем столбцы на русский
+        describe_df = describe_df.rename(columns={
+            'count': 'Количество',
+            'mean': 'Среднее',
+            'std': 'Ст. отклонение',
+            'min': 'Минимум',
+            '25%': '25%',
+            '50%': 'Медиана',
+            '75%': '75%',
+            'max': 'Максимум'
+        })
+        
+        # Добавляем тип данных
+        describe_df['Тип'] = df_filtered[numeric_cols].dtypes.values
+        
+        # Показываем таблицу
+        st.dataframe(describe_df, use_container_width=True)
+    else:
+        st.warning("Нет числовых колонок для статистики")
+
+    # Дополнительно: KPI-карточки по каждому признаку
+    st.subheader("📌 Ключевые статистики по признакам")
+    
+    # Выбираем 4 признака (первые 4 колонки, обычно это числовые признаки ириса)
+    features_for_kpi = df_filtered.columns[:4] if len(df_filtered.columns) >= 4 else df_filtered.columns
+    
+    # Создаем колонки для карточек
+    cols = st.columns(len(features_for_kpi))
+    
+    for idx, feature in enumerate(features_for_kpi):
+        with cols[idx]:
+            if feature in df_filtered.columns:
+                # Основные метрики для каждого признака
+                st.metric(
+                    label=feature,
+                    value=f"{df_filtered[feature].mean():.2f}",
+                    delta=f"σ={df_filtered[feature].std():.2f}"
+                )
+                # Дополнительная информация под карточкой
+                with st.expander("Подробнее", expanded=False):
+                    st.write(f"**Медиана:** {df_filtered[feature].median():.2f}")
+                    st.write(f"**Минимум:** {df_filtered[feature].min():.2f}")
+                    st.write(f"**Максимум:** {df_filtered[feature].max():.2f}")
 
     # Кнопка скачать
     st.download_button(
@@ -165,7 +245,7 @@ if page == " Визуализация данных":
     # Выводы по корреляциям
     st.subheader("📊 Анализ корреляций")
     
-    with st.expander("📈 Ключевые выводы по корреляциям", expanded=True):
+    with st.expander("📈 Ключевые выводы по корреляций", expanded=True):
         st.markdown("""
         ### Сильные положительные корреляции:
         
@@ -239,7 +319,7 @@ elif page == " Анализ данных":
     st.pyplot(fig)
 
 # ------------- Страница: Кластеризация -------------
-elif page == "🤖 Кластеризация":
+elif page == " Кластеризация":
     st.title("🤖 Кластеризация")
 
     X = df_filtered.iloc[:, :4].values

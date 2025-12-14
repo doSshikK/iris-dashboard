@@ -45,12 +45,6 @@ def compute_basic_stats(df):
     })
     return stats_df
 
-@st.cache_data
-def train_logistic_model(X_train, y_train, max_iter=200):
-    model = LogisticRegression(random_state=42, max_iter=max_iter, multi_class='auto')
-    model.fit(X_train, y_train)
-    return model
-
 # Загружаем данные
 df = load_data()
 
@@ -128,7 +122,7 @@ if page == " Визуализация данных":
         st.metric("Всего дубликатов", total_duplicates)
         st.metric("Уникальных строк", unique_rows)
 
-        # Описание колонок
+    # Описание колонок
     st.subheader("📝 Описание колонок")
     
     with st.expander("📋 Подробное описание признаков", expanded=True):
@@ -397,78 +391,94 @@ elif page == " Классификация":
 
     st.info("Модель логистической регрессии используется для мультиклассовой классификации (setosa / versicolor / virginica).")
 
-    # Подготовка данных (стандартизация рекомендуема)
-    X = df_filtered.iloc[:, :4].copy()
-    y = df_filtered['species'].copy()
+    # Проверка, что есть хотя бы 2 разных класса для классификации
+    if df_filtered['species'].nunique() < 2:
+        st.error("❌ Для классификации необходимо минимум 2 разных класса. Выберите больше видов ирисов в фильтре.")
+    else:
+        # Подготовка данных (стандартизация рекомендуема)
+        X = df_filtered.iloc[:, :4].copy()
+        y = df_filtered['species'].copy()
 
-    # Стандартизация
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+        # Стандартизация
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
 
-    # Выбор размера теста
-    test_size = st.slider("Размер тестовой выборки (%)", 10, 40, 20)
-    stratify_flag = True if y.nunique() > 1 else False
+        # Выбор размера теста
+        test_size = st.slider("Размер тестовой выборки (%)", 10, 40, 20)
+        
+        # Стратификация только если есть хотя бы 2 образца в каждом классе
+        stratify_flag = all(y.value_counts() >= 2)
+        
+        if stratify_flag:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_scaled, y, test_size=test_size / 100, random_state=42, stratify=y
+            )
+        else:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_scaled, y, test_size=test_size / 100, random_state=42
+            )
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_scaled, y, test_size=test_size / 100, random_state=42, stratify=y if stratify_flag else None
-    )
+        # Обучение модели
+        model = LogisticRegression(random_state=42, max_iter=300)
+        model.fit(X_train, y_train)
 
-    # Обучение модели
-    model = train_logistic_model(X_train, y_train, max_iter=300)
+        # Предсказания
+        y_pred = model.predict(X_test)
+        acc = accuracy_score(y_test, y_pred)
 
-    # Предсказания
-    y_pred = model.predict(X_test)
-    acc = accuracy_score(y_test, y_pred)
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Accuracy", f"{acc:.3f}")
+        with col2:
+            st.metric("Train size", X_train.shape[0])
+        with col3:
+            st.metric("Test size", X_test.shape[0])
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Accuracy", f"{acc:.3f}")
-    with col2:
-        st.metric("Train size", X_train.shape[0])
-    with col3:
-        st.metric("Test size", X_test.shape[0])
+        st.subheader("Матрица ошибок (Confusion Matrix)")
+        cm = confusion_matrix(y_test, y_pred)
+        fig, ax = plt.subplots(figsize=(7, 5))
+        
+        # Получаем имена классов
+        class_names = ['setosa', 'versicolor', 'virginica'][:len(np.unique(y))]
+        
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax,
+                    xticklabels=class_names,
+                    yticklabels=class_names)
+        ax.set_xlabel('Предсказанные метки')
+        ax.set_ylabel('Истинные метки')
+        st.pyplot(fig)
 
-    st.subheader("Матрица ошибок (Confusion Matrix)")
-    cm = confusion_matrix(y_test, y_pred)
-    fig, ax = plt.subplots(figsize=(7, 5))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax,
-                xticklabels=['setosa', 'versicolor', 'virginica'],
-                yticklabels=['setosa', 'versicolor', 'virginica'])
-    ax.set_xlabel('Предсказанные метки')
-    ax.set_ylabel('Истинные метки')
-    st.pyplot(fig)
+        st.subheader("Отчет классификации (Precision / Recall / F1)")
+        report = classification_report(y_test, y_pred, output_dict=True)
+        report_df = pd.DataFrame(report).transpose()
+        st.dataframe(report_df, use_container_width=True)
 
-    st.subheader("Отчет классификации (Precision / Recall / F1)")
-    report = classification_report(y_test, y_pred, output_dict=True)
-    report_df = pd.DataFrame(report).transpose()
-    st.dataframe(report_df, use_container_width=True)
+        st.subheader("Визуализация правильных/ошибочных предсказаний (по признакам лепестка)")
+        # Визуализация ошибок по оригинальным (не стандартизованным) значениям
+        X_test_orig = pd.DataFrame(scaler.inverse_transform(X_test), columns=X.columns)
+        results_df = X_test_orig.copy()
+        results_df['true_species'] = y_test.values
+        results_df['predicted_species'] = y_pred
+        results_df['correct'] = results_df['true_species'] == results_df['predicted_species']
+        results_df['true_name'] = results_df['true_species'].map({0: 'setosa', 1: 'versicolor', 2: 'virginica'})
+        results_df['pred_name'] = results_df['predicted_species'].map({0: 'setosa', 1: 'versicolor', 2: 'virginica'})
 
-    st.subheader("Визуализация правильных/ошибочных предсказаний (по признакам лепестка)")
-    # Визуализация ошибок по оригинальным (не стандартизованным) значениям
-    X_test_orig = pd.DataFrame(scaler.inverse_transform(X_test), columns=X.columns)
-    results_df = X_test_orig.copy()
-    results_df['true_species'] = y_test.values
-    results_df['predicted_species'] = y_pred
-    results_df['correct'] = results_df['true_species'] == results_df['predicted_species']
-    results_df['true_name'] = results_df['true_species'].map({0: 'setosa', 1: 'versicolor', 2: 'virginica'})
-    results_df['pred_name'] = results_df['predicted_species'].map({0: 'setosa', 1: 'versicolor', 2: 'virginica'})
+        fig, ax = plt.subplots(figsize=(10, 6))
+        correct = results_df[results_df['correct']]
+        wrong = results_df[~results_df['correct']]
 
-    fig, ax = plt.subplots(figsize=(10, 6))
-    correct = results_df[results_df['correct']]
-    wrong = results_df[~results_df['correct']]
+        ax.scatter(correct['petal length (cm)'], correct['petal width (cm)'], c='green', s=80, label='Правильно', alpha=0.6)
+        ax.scatter(wrong['petal length (cm)'], wrong['petal width (cm)'], c='red', s=120, marker='x', label='Ошибка', alpha=0.9)
+        for idx, row in wrong.iterrows():
+            ax.annotate(f"{row['true_name']}→{row['pred_name']}",
+                        (row['petal length (cm)'], row['petal width (cm)']),
+                        textcoords="offset points", xytext=(0, 8), ha='center', fontsize=9, color='darkred')
 
-    ax.scatter(correct['petal length (cm)'], correct['petal width (cm)'], c='green', s=80, label='Правильно', alpha=0.6)
-    ax.scatter(wrong['petal length (cm)'], wrong['petal width (cm)'], c='red', s=120, marker='x', label='Ошибка', alpha=0.9)
-    for idx, row in wrong.iterrows():
-        ax.annotate(f"{row['true_name']}→{row['pred_name']}",
-                    (row['petal length (cm)'], row['petal width (cm)']),
-                    textcoords="offset points", xytext=(0, 8), ha='center', fontsize=9, color='darkred')
-
-    ax.set_xlabel('Длина лепестка (cm)')
-    ax.set_ylabel('Ширина лепестка (cm)')
-    ax.set_title('Результаты классификации (зелёные = правильно, красные = ошибки)')
-    ax.legend()
-    st.pyplot(fig)
+        ax.set_xlabel('Длина лепестка (cm)')
+        ax.set_ylabel('Ширина лепестка (cm)')
+        ax.set_title('Результаты классификации (зелёные = правильно, красные = ошибки)')
+        ax.legend()
+        st.pyplot(fig)
 
 # ------------- Страница: Метрики и выводы -------------
 elif page == " Метрики / Выводы":
@@ -499,29 +509,30 @@ elif page == " Метрики / Выводы":
 
     # Классификация: тренировочный прогон на всем датасете (кросс-валидация не включена здесь,
     # но мы можем показать обученную модель на полном наборе и её важности признаков)
-    st.subheader("Важность признаков (Logistic Regression)")
-    # Обучаем на полном наборе (стандартизированном)
-    X_all = df_filtered.iloc[:, :4]
-    y_all = df_filtered['species']
-    scaler_full = StandardScaler()
-    X_all_scaled = scaler_full.fit_transform(X_all)
-    model_full = LogisticRegression(random_state=42, max_iter=300)
-    model_full.fit(X_all_scaled, y_all)
-    # Для мультиклассовой логистической регрессии берём среднюю абсолютную важность по классам
-    coefs = np.abs(model_full.coef_)  # shape (n_classes, n_features)
-    importance_vals = coefs.mean(axis=0)
-    importance_df = pd.DataFrame({
-        'Признак': X_all.columns,
-        'Importance': importance_vals
-    }).sort_values('Importance', ascending=False)
-    st.dataframe(importance_df.round(4), use_container_width=True)
+    if df_filtered['species'].nunique() >= 2:
+        st.subheader("Важность признаков (Logistic Regression)")
+        # Обучаем на полном наборе (стандартизированном)
+        X_all = df_filtered.iloc[:, :4]
+        y_all = df_filtered['species']
+        scaler_full = StandardScaler()
+        X_all_scaled = scaler_full.fit_transform(X_all)
+        model_full = LogisticRegression(random_state=42, max_iter=300)
+        model_full.fit(X_all_scaled, y_all)
+        # Для мультиклассовой логистической регрессии берём среднюю абсолютную важность по классам
+        coefs = np.abs(model_full.coef_)  # shape (n_classes, n_features)
+        importance_vals = coefs.mean(axis=0)
+        importance_df = pd.DataFrame({
+            'Признак': X_all.columns,
+            'Importance': importance_vals
+        }).sort_values('Importance', ascending=False)
+        st.dataframe(importance_df.round(4), use_container_width=True)
 
-    # Горизонтальный бар для важности
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.barh(importance_df['Признак'], importance_df['Importance'])
-    ax.set_xlabel('Средняя |коэффициент|')
-    ax.set_title('Важность признаков (Logistic Regression)')
-    st.pyplot(fig)
+        # Горизонтальный бар для важности
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.barh(importance_df['Признак'], importance_df['Importance'])
+        ax.set_xlabel('Средняя |коэффициент|')
+        ax.set_title('Важность признаков (Logistic Regression)')
+        st.pyplot(fig)
 
     st.markdown("---")
     st.success("""

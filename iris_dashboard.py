@@ -421,15 +421,11 @@ elif page == " Классификация":
             )
 
         # Обучение модели логистической регрессии
-        model_lr = LogisticRegression(random_state=42, max_iter=300)
-        model_lr.fit(X_train, y_train)
-        
-        # Обучение модели Random Forest для важности признаков
-        model_rf = RandomForestClassifier(n_estimators=100, random_state=42)
-        model_rf.fit(X_train, y_train)
+        model = LogisticRegression(random_state=42, max_iter=300)
+        model.fit(X_train, y_train)
 
         # Предсказания
-        y_pred = model_lr.predict(X_test)
+        y_pred = model.predict(X_test)
         acc = accuracy_score(y_test, y_pred)
 
         col1, col2, col3 = st.columns(3)
@@ -441,40 +437,21 @@ elif page == " Классификация":
             st.metric("Test size", X_test.shape[0])
 
         # ---------- Важность признаков ----------
-        st.subheader("📊 Важность признаков")
-        
-        # Важность признаков из Random Forest
-        feature_importance_rf = pd.DataFrame({
-            'Признак': X.columns,
-            'Важность': model_rf.feature_importances_
-        }).sort_values('Важность', ascending=False)
+        st.subheader("📊 Важность признаков (Logistic Regression)")
         
         # Важность признаков из Logistic Regression
-        coefs_lr = np.abs(model_lr.coef_)
-        feature_importance_lr = pd.DataFrame({
+        coefs = np.abs(model.coef_)
+        feature_importance = pd.DataFrame({
             'Признак': X.columns,
-            'Важность': coefs_lr.mean(axis=0)
+            'Важность': coefs.mean(axis=0)
         }).sort_values('Важность', ascending=False)
         
-        col_imp1, col_imp2 = st.columns(2)
-        
-        with col_imp1:
-            st.markdown("**Random Forest:**")
-            fig_rf, ax_rf = plt.subplots(figsize=(6, 4))
-            ax_rf.barh(feature_importance_rf['Признак'], feature_importance_rf['Важность'], color='skyblue')
-            ax_rf.set_xlabel('Важность признака')
-            ax_rf.set_title('Random Forest')
-            st.pyplot(fig_rf)
-            st.dataframe(feature_importance_rf.round(4), use_container_width=True)
-        
-        with col_imp2:
-            st.markdown("**Logistic Regression:**")
-            fig_lr, ax_lr = plt.subplots(figsize=(6, 4))
-            ax_lr.barh(feature_importance_lr['Признак'], feature_importance_lr['Важность'], color='lightgreen')
-            ax_lr.set_xlabel('Средняя |коэффициент|')
-            ax_lr.set_title('Logistic Regression')
-            st.pyplot(fig_lr)
-            st.dataframe(feature_importance_lr.round(4), use_container_width=True)
+        fig_imp, ax_imp = plt.subplots(figsize=(8, 4))
+        ax_imp.barh(feature_importance['Признак'], feature_importance['Важность'], color='lightgreen')
+        ax_imp.set_xlabel('Средняя |коэффициент|')
+        ax_imp.set_title('Важность признаков (Logistic Regression)')
+        st.pyplot(fig_imp)
+        st.dataframe(feature_importance.round(4), use_container_width=True)
 
         st.subheader("Матрица ошибок (Confusion Matrix)")
         cm = confusion_matrix(y_test, y_pred)
@@ -493,7 +470,29 @@ elif page == " Классификация":
         st.subheader("Отчет классификации (Precision / Recall / F1)")
         report = classification_report(y_test, y_pred, output_dict=True)
         report_df = pd.DataFrame(report).transpose()
-        st.dataframe(report_df, use_container_width=True)
+        
+        # Переводим названия на русский
+        russian_names = {
+            '0': 'setosa',
+            '1': 'versicolor', 
+            '2': 'virginica',
+            'accuracy': 'accuracy (общая точность)',
+            'macro avg': 'macro avg (среднее по классам)',
+            'weighted avg': 'weighted avg (взвешенное среднее)'
+        }
+        
+        # Переименовываем индексы
+        report_df.index = report_df.index.map(lambda x: russian_names.get(x, x))
+        
+        # Переименовываем столбцы на русский
+        report_df = report_df.rename(columns={
+            'precision': 'precision (точность)',
+            'recall': 'recall (полнота)',
+            'f1-score': 'f1-score (f-мера)',
+            'support': 'support (кол-во образцов)'
+        })
+        
+        st.dataframe(report_df.round(3), use_container_width=True)
 
         st.subheader("Визуализация правильных/ошибочных предсказаний (по признакам лепестка)")
         # Визуализация ошибок по оригинальным (не стандартизованным) значениям
@@ -522,7 +521,7 @@ elif page == " Классификация":
         ax.legend()
         st.pyplot(fig)
         
-        # ----------Интерактивный прогноз ----------
+        # ---------- Интерактивный прогноз ----------
         st.subheader("Интерактивный прогноз")
         st.markdown("Введите параметры цветка для предсказания вида:")
         
@@ -552,34 +551,27 @@ elif page == " Классификация":
                 input_data = np.array([[sepal_length, sepal_width, petal_length, petal_width]])
                 input_scaled = scaler.transform(input_data)
                 
-                # Предсказание от обеих моделей
-                prediction_lr = model_lr.predict(input_scaled)[0]
-                prediction_rf = model_rf.predict(input_scaled)[0]
+                # Предсказание
+                prediction = model.predict(input_scaled)[0]
                 
-                # Вероятности (только для LR, так как она имеет predict_proba)
-                if hasattr(model_lr, 'predict_proba'):
-                    probabilities = model_lr.predict_proba(input_scaled)[0]
+                # Вероятности
+                if hasattr(model, 'predict_proba'):
+                    probabilities = model.predict_proba(input_scaled)[0]
                 
                 # Отображение результатов
                 species_names = {0: 'setosa', 1: 'versicolor', 2: 'virginica'}
                 
-                col_res1, col_res2, col_res3 = st.columns(3)
+                col_res1, col_res2 = st.columns(2)
                 
                 with col_res1:
-                    st.success(f"**Logistic Regression:**\n**{species_names[prediction_lr].upper()}**")
+                    st.success(f"**Предсказанный вид:**\n**{species_names[prediction].upper()}**")
                 
                 with col_res2:
-                    st.info(f"**Random Forest:**\n**{species_names[prediction_rf].upper()}**")
-                
-                with col_res3:
-                    if prediction_lr == prediction_rf:
-                        st.success("✅ Предсказание верное")
-                    else:
-                        st.error("❌ Предсказания различаются")
+                    st.info(f"**Точность модели:**\n**{acc:.1%}**")
                 
                 # Визуализация вероятностей
-                if hasattr(model_lr, 'predict_proba'):
-                    st.subheader("Вероятности принадлежности к классам (LR):")
+                if hasattr(model, 'predict_proba'):
+                    st.subheader("Вероятности принадлежности к классам:")
                     
                     prob_df = pd.DataFrame({
                         'Вид': ['setosa', 'versicolor', 'virginica'],
@@ -610,6 +602,7 @@ elif page == " Классификация":
                     'Единица': ['см', 'см', 'см', 'см']
                 })
                 st.dataframe(params_df, use_container_width=True)
+                
 # ------------- Страница: Метрики и выводы -------------
 elif page == " Метрики / Выводы":
     st.title("📈 Метрики и ключевые выводы")

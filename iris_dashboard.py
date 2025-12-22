@@ -391,8 +391,6 @@ elif page == " Кластеризация":
 elif page == " Классификация":
     st.title("🎯 Классификация видов ирисов")
 
-    st.info("Модель логистической регрессии используется для мультиклассовой классификации (setosa / versicolor / virginica).")
-
     # Проверка, что есть хотя бы 2 разных класса для классификации
     if df_filtered['species'].nunique() < 2:
         st.error("❌ Для классификации необходимо минимум 2 разных класса. Выберите больше видов ирисов в фильтре.")
@@ -420,109 +418,197 @@ elif page == " Классификация":
                 X_scaled, y, test_size=test_size / 100, random_state=42
             )
 
-        # Обучение модели логистической регрессии
-        model = LogisticRegression(random_state=42, max_iter=300)
-        model.fit(X_train, y_train)
-
+        # ------ Обучение двух моделей ------
+        st.subheader("🤖 Сравнение моделей классификации")
+        
+        # Создаем две модели
+        model_lr = LogisticRegression(random_state=42, max_iter=300)
+        model_rf = RandomForestClassifier(random_state=42, n_estimators=100)
+        
+        # Обучаем модели
+        model_lr.fit(X_train, y_train)
+        model_rf.fit(X_train, y_train)
+        
         # Предсказания
-        y_pred = model.predict(X_test)
-        acc = accuracy_score(y_test, y_pred)
+        y_pred_lr = model_lr.predict(X_test)
+        y_pred_rf = model_rf.predict(X_test)
+        
+        # Метрики
+        acc_lr = accuracy_score(y_test, y_pred_lr)
+        acc_rf = accuracy_score(y_test, y_pred_rf)
+        
+        # ------ Сравнение метрик ------
+        col_metrics1, col_metrics2, col_metrics3 = st.columns(3)
+        with col_metrics1:
+            st.metric("📊 Logistic Regression", f"{acc_lr:.3f}", 
+                     delta=f"{(acc_lr - acc_rf):+.3f}" if acc_lr != acc_rf else "0.000")
+        with col_metrics2:
+            st.metric("🌲 Random Forest", f"{acc_rf:.3f}",
+                     delta=f"{(acc_rf - acc_lr):+.3f}" if acc_rf != acc_lr else "0.000")
+        with col_metrics3:
+            st.metric("📈 Разница", f"{abs(acc_lr - acc_rf):.3f}",
+                     delta="Лучше LR" if acc_lr > acc_rf else "Лучше RF" if acc_rf > acc_lr else "Равны")
 
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Accuracy", f"{acc:.3f}")
-        with col2:
-            st.metric("Train size", X_train.shape[0])
-        with col3:
-            st.metric("Test size", X_test.shape[0])
+        # ------ Детальное сравнение в табах ------
+        tab_lr, tab_rf, tab_compare = st.tabs(["Logistic Regression", "Random Forest", "Сравнение"])
+        
+        with tab_lr:
+            st.subheader("📊 Logistic Regression")
+            
+            # Важность признаков для LR
+            coefs_lr = np.abs(model_lr.coef_)
+            feature_importance_lr = pd.DataFrame({
+                'Признак': X.columns,
+                'Важность': coefs_lr.mean(axis=0)
+            }).sort_values('Важность', ascending=False)
+            
+            col_lr1, col_lr2 = st.columns(2)
+            with col_lr1:
+                fig_imp_lr, ax_imp_lr = plt.subplots(figsize=(6, 4))
+                ax_imp_lr.barh(feature_importance_lr['Признак'], feature_importance_lr['Важность'], 
+                              color='lightgreen')
+                ax_imp_lr.set_xlabel('Средняя |коэффициент|')
+                ax_imp_lr.set_title('Важность признаков (LR)')
+                st.pyplot(fig_imp_lr)
+            
+            with col_lr2:
+                st.dataframe(feature_importance_lr.round(4), use_container_width=True)
+            
+            # Матрица ошибок для LR
+            cm_lr = confusion_matrix(y_test, y_pred_lr)
+            fig_cm_lr, ax_cm_lr = plt.subplots(figsize=(5, 4))
+            class_names = ['setosa', 'versicolor', 'virginica'][:len(np.unique(y))]
+            sns.heatmap(cm_lr, annot=True, fmt='d', cmap='Blues', ax=ax_cm_lr,
+                        xticklabels=class_names, yticklabels=class_names)
+            ax_cm_lr.set_title('Матрица ошибок (LR)')
+            ax_cm_lr.set_xlabel('Предсказанные метки')
+            ax_cm_lr.set_ylabel('Истинные метки')
+            st.pyplot(fig_cm_lr)
+            
+            # Отчет классификации для LR
+            st.subheader("Отчет классификации")
+            report_lr = classification_report(y_test, y_pred_lr, output_dict=True)
+            report_df_lr = pd.DataFrame(report_lr).transpose()
+            st.dataframe(report_df_lr.round(3), use_container_width=True)
+        
+        with tab_rf:
+            st.subheader("🌲 Random Forest")
+            
+            # Важность признаков для RF
+            feature_importance_rf = pd.DataFrame({
+                'Признак': X.columns,
+                'Важность': model_rf.feature_importances_
+            }).sort_values('Важность', ascending=False)
+            
+            col_rf1, col_rf2 = st.columns(2)
+            with col_rf1:
+                fig_imp_rf, ax_imp_rf = plt.subplots(figsize=(6, 4))
+                ax_imp_rf.barh(feature_importance_rf['Признак'], feature_importance_rf['Важность'], 
+                              color='lightblue')
+                ax_imp_rf.set_xlabel('Важность (Gini)')
+                ax_imp_rf.set_title('Важность признаков (RF)')
+                st.pyplot(fig_imp_rf)
+            
+            with col_rf2:
+                st.dataframe(feature_importance_rf.round(4), use_container_width=True)
+            
+            # Матрица ошибок для RF
+            cm_rf = confusion_matrix(y_test, y_pred_rf)
+            fig_cm_rf, ax_cm_rf = plt.subplots(figsize=(5, 4))
+            sns.heatmap(cm_rf, annot=True, fmt='d', cmap='Greens', ax=ax_cm_rf,
+                        xticklabels=class_names, yticklabels=class_names)
+            ax_cm_rf.set_title('Матрица ошибок (RF)')
+            ax_cm_rf.set_xlabel('Предсказанные метки')
+            ax_cm_rf.set_ylabel('Истинные метки')
+            st.pyplot(fig_cm_rf)
+            
+            # Отчет классификации для RF
+            st.subheader("Отчет классификации")
+            report_rf = classification_report(y_test, y_pred_rf, output_dict=True)
+            report_df_rf = pd.DataFrame(report_rf).transpose()
+            st.dataframe(report_df_rf.round(3), use_container_width=True)
+        
+        with tab_compare:
+            st.subheader("📈 Сравнение моделей")
+            
+            # Сравнение важности признаков
+            fig_compare, ax_compare = plt.subplots(figsize=(10, 5))
+            x = np.arange(len(X.columns))
+            width = 0.35
+            
+            ax_compare.bar(x - width/2, feature_importance_lr.sort_values('Признак')['Важность'], 
+                          width, label='Logistic Regression', color='lightgreen', alpha=0.8)
+            ax_compare.bar(x + width/2, feature_importance_rf.sort_values('Признак')['Важность'], 
+                          width, label='Random Forest', color='lightblue', alpha=0.8)
+            
+            ax_compare.set_xlabel('Признаки')
+            ax_compare.set_ylabel('Важность')
+            ax_compare.set_title('Сравнение важности признаков')
+            ax_compare.set_xticks(x)
+            ax_compare.set_xticklabels(X.columns, rotation=45)
+            ax_compare.legend()
+            st.pyplot(fig_compare)
+            
+            # Сравнение точности по классам
+            st.subheader("Точность по классам")
+            accuracy_by_class = pd.DataFrame({
+                'Класс': ['setosa', 'versicolor', 'virginica'][:len(np.unique(y))],
+                'Logistic Regression': [np.mean(y_pred_lr[y_test == i] == i) for i in np.unique(y)],
+                'Random Forest': [np.mean(y_pred_rf[y_test == i] == i) for i in np.unique(y)]
+            })
+            st.dataframe(accuracy_by_class.round(3), use_container_width=True)
+            
+            # Визуализация ошибок обеих моделей
+            st.subheader("Визуализация ошибок обеих моделей")
+            
+            # Подготовка данных для визуализации
+            X_test_orig = pd.DataFrame(scaler.inverse_transform(X_test), columns=X.columns)
+            results_df = X_test_orig.copy()
+            results_df['true_species'] = y_test.values
+            results_df['pred_lr'] = y_pred_lr
+            results_df['pred_rf'] = y_pred_rf
+            results_df['correct_lr'] = results_df['true_species'] == results_df['pred_lr']
+            results_df['correct_rf'] = results_df['true_species'] == results_df['pred_rf']
+            results_df['true_name'] = results_df['true_species'].map({0: 'setosa', 1: 'versicolor', 2: 'virginica'})
+            
+            fig_errors, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+            
+            # LR ошибки
+            correct_lr = results_df[results_df['correct_lr']]
+            wrong_lr = results_df[~results_df['correct_lr']]
+            ax1.scatter(correct_lr['petal length (cm)'], correct_lr['petal width (cm)'], 
+                       c='green', s=80, label='Правильно', alpha=0.6)
+            ax1.scatter(wrong_lr['petal length (cm)'], wrong_lr['petal width (cm)'], 
+                       c='red', s=120, marker='x', label='Ошибка', alpha=0.9)
+            ax1.set_xlabel('Длина лепестка (cm)')
+            ax1.set_ylabel('Ширина лепестка (cm)')
+            ax1.set_title('Logistic Regression')
+            ax1.legend()
+            
+            # RF ошибки
+            correct_rf = results_df[results_df['correct_rf']]
+            wrong_rf = results_df[~results_df['correct_rf']]
+            ax2.scatter(correct_rf['petal length (cm)'], correct_rf['petal width (cm)'], 
+                       c='green', s=80, label='Правильно', alpha=0.6)
+            ax2.scatter(wrong_rf['petal length (cm)'], wrong_rf['petal width (cm)'], 
+                       c='red', s=120, marker='x', label='Ошибка', alpha=0.9)
+            ax2.set_xlabel('Длина лепестка (cm)')
+            ax2.set_ylabel('Ширина лепестка (cm)')
+            ax2.set_title('Random Forest')
+            ax2.legend()
+            
+            st.pyplot(fig_errors)
+            
+            # Выводы
+            st.info(f"""
+            **Ключевые выводы:**
+            - Logistic Regression: **{acc_lr:.1%}** точности
+            - Random Forest: **{acc_rf:.1%}** точности
+            - Разница: **{abs(acc_lr - acc_rf):.1%}**
+            """)
 
-        # ---------- Важность признаков ----------
-        st.subheader("📊 Важность признаков (Logistic Regression)")
-        
-        # Важность признаков из Logistic Regression
-        coefs = np.abs(model.coef_)
-        feature_importance = pd.DataFrame({
-            'Признак': X.columns,
-            'Важность': coefs.mean(axis=0)
-        }).sort_values('Важность', ascending=False)
-        
-        fig_imp, ax_imp = plt.subplots(figsize=(8, 4))
-        ax_imp.barh(feature_importance['Признак'], feature_importance['Важность'], color='lightgreen')
-        ax_imp.set_xlabel('Средняя |коэффициент|')
-        ax_imp.set_title('Важность признаков')
-        st.pyplot(fig_imp)
-        st.dataframe(feature_importance.round(4), use_container_width=True)
-
-        st.subheader("Матрица ошибок (Confusion Matrix)")
-        cm = confusion_matrix(y_test, y_pred)
-        fig, ax = plt.subplots(figsize=(7, 5))
-        
-        # Получаем имена классов
-        class_names = ['setosa', 'versicolor', 'virginica'][:len(np.unique(y))]
-        
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax,
-                    xticklabels=class_names,
-                    yticklabels=class_names)
-        ax.set_xlabel('Предсказанные метки')
-        ax.set_ylabel('Истинные метки')
-        st.pyplot(fig)
-
-        st.subheader("Отчет классификации (Precision / Recall / F1)")
-        report = classification_report(y_test, y_pred, output_dict=True)
-        report_df = pd.DataFrame(report).transpose()
-        
-        # Переводим названия на русский
-        russian_names = {
-            '0': 'setosa',
-            '1': 'versicolor', 
-            '2': 'virginica',
-            'accuracy': 'accuracy (общая точность)',
-            'macro avg': 'macro avg (среднее по классам)',
-            'weighted avg': 'weighted avg (взвешенное среднее)'
-        }
-        
-        # Переименовываем индексы
-        report_df.index = report_df.index.map(lambda x: russian_names.get(x, x))
-        
-        # Переименовываем столбцы на русский
-        report_df = report_df.rename(columns={
-            'precision': 'precision (точность)',
-            'recall': 'recall (полнота)',
-            'f1-score': 'f1-score (f-мера)',
-            'support': 'support (кол-во образцов)'
-        })
-        
-        st.dataframe(report_df.round(3), use_container_width=True)
-
-        st.subheader("Визуализация правильных/ошибочных предсказаний (по признакам лепестка)")
-        # Визуализация ошибок по оригинальным (не стандартизованным) значениям
-        X_test_orig = pd.DataFrame(scaler.inverse_transform(X_test), columns=X.columns)
-        results_df = X_test_orig.copy()
-        results_df['true_species'] = y_test.values
-        results_df['predicted_species'] = y_pred
-        results_df['correct'] = results_df['true_species'] == results_df['predicted_species']
-        results_df['true_name'] = results_df['true_species'].map({0: 'setosa', 1: 'versicolor', 2: 'virginica'})
-        results_df['pred_name'] = results_df['predicted_species'].map({0: 'setosa', 1: 'versicolor', 2: 'virginica'})
-
-        fig, ax = plt.subplots(figsize=(10, 6))
-        correct = results_df[results_df['correct']]
-        wrong = results_df[~results_df['correct']]
-
-        ax.scatter(correct['petal length (cm)'], correct['petal width (cm)'], c='green', s=80, label='Правильно', alpha=0.6)
-        ax.scatter(wrong['petal length (cm)'], wrong['petal width (cm)'], c='red', s=120, marker='x', label='Ошибка', alpha=0.9)
-        for idx, row in wrong.iterrows():
-            ax.annotate(f"{row['true_name']}→{row['pred_name']}",
-                        (row['petal length (cm)'], row['petal width (cm)']),
-                        textcoords="offset points", xytext=(0, 8), ha='center', fontsize=9, color='darkred')
-
-        ax.set_xlabel('Длина лепестка (cm)')
-        ax.set_ylabel('Ширина лепестка (cm)')
-        ax.set_title('Результаты классификации (зелёные = правильно, красные = ошибки)')
-        ax.legend()
-        st.pyplot(fig)
-        
-        # ---------- Интерактивный прогноз ----------
-        st.subheader("Интерактивный прогноз")
+        # ------ Интерактивный прогноз ------
+        st.subheader("🔮 Интерактивный прогноз")
         st.markdown("Введите параметры цветка для предсказания вида:")
         
         with st.form("prediction_form"):
@@ -544,6 +630,9 @@ elif page == " Классификация":
                                              min_value=0.1, max_value=10.0, 
                                              value=0.2, step=0.1)
             
+            model_choice = st.radio("Выберите модель для прогноза:", 
+                                   ["Logistic Regression", "Random Forest", "Обе модели"])
+            
             submitted = st.form_submit_button("Предсказать вид")
             
             if submitted:
@@ -551,47 +640,70 @@ elif page == " Классификация":
                 input_data = np.array([[sepal_length, sepal_width, petal_length, petal_width]])
                 input_scaled = scaler.transform(input_data)
                 
-                # Предсказание
-                prediction = model.predict(input_scaled)[0]
+                # Предсказания
+                prediction_lr = model_lr.predict(input_scaled)[0]
+                prediction_rf = model_rf.predict(input_scaled)[0]
                 
                 # Вероятности
-                if hasattr(model, 'predict_proba'):
-                    probabilities = model.predict_proba(input_scaled)[0]
+                prob_lr = model_lr.predict_proba(input_scaled)[0] if hasattr(model_lr, 'predict_proba') else None
+                prob_rf = model_rf.predict_proba(input_scaled)[0] if hasattr(model_rf, 'predict_proba') else None
                 
-                # Отображение результатов
                 species_names = {0: 'setosa', 1: 'versicolor', 2: 'virginica'}
                 
-                col_res1, col_res2 = st.columns(2)
+                if model_choice == "Logistic Regression" or model_choice == "Обе модели":
+                    st.subheader("📊 Logistic Regression")
+                    col_lr1, col_lr2 = st.columns(2)
+                    with col_lr1:
+                        st.success(f"**Предсказанный вид:**\n**{species_names[prediction_lr].upper()}**")
+                    with col_lr2:
+                        st.info(f"**Точность модели:**\n**{acc_lr:.1%}**")
+                    
+                    if prob_lr is not None:
+                        st.subheader("Вероятности (LR):")
+                        prob_df_lr = pd.DataFrame({
+                            'Вид': ['setosa', 'versicolor', 'virginica'],
+                            'Вероятность': prob_lr
+                        }).sort_values('Вероятность', ascending=False)
+                        
+                        fig_prob_lr, ax_prob_lr = plt.subplots(figsize=(8, 3))
+                        ax_prob_lr.bar(prob_df_lr['Вид'], prob_df_lr['Вероятность'], 
+                                      color=['red' if p == max(prob_lr) else 'gray' for p in prob_lr])
+                        ax_prob_lr.set_ylabel('Вероятность')
+                        ax_prob_lr.set_ylim(0, 1.1)
+                        for bar, prob in zip(ax_prob_lr.patches, prob_df_lr['Вероятность']):
+                            ax_prob_lr.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.02,
+                                          f'{prob:.1%}', ha='center', va='bottom', fontsize=10)
+                        st.pyplot(fig_prob_lr)
                 
-                with col_res1:
-                    st.success(f"**Предсказанный вид:**\n**{species_names[prediction].upper()}**")
+                if model_choice == "Random Forest" or model_choice == "Обе модели":
+                    st.subheader("🌲 Random Forest")
+                    col_rf1, col_rf2 = st.columns(2)
+                    with col_rf1:
+                        st.success(f"**Предсказанный вид:**\n**{species_names[prediction_rf].upper()}**")
+                    with col_rf2:
+                        st.info(f"**Точность модели:**\n**{acc_rf:.1%}**")
+                    
+                    if prob_rf is not None:
+                        st.subheader("Вероятности (RF):")
+                        prob_df_rf = pd.DataFrame({
+                            'Вид': ['setosa', 'versicolor', 'virginica'],
+                            'Вероятность': prob_rf
+                        }).sort_values('Вероятность', ascending=False)
+                        
+                        fig_prob_rf, ax_prob_rf = plt.subplots(figsize=(8, 3))
+                        ax_prob_rf.bar(prob_df_rf['Вид'], prob_df_rf['Вероятность'], 
+                                      color=['blue' if p == max(prob_rf) else 'gray' for p in prob_rf])
+                        ax_prob_rf.set_ylabel('Вероятность')
+                        ax_prob_rf.set_ylim(0, 1.1)
+                        for bar, prob in zip(ax_prob_rf.patches, prob_df_rf['Вероятность']):
+                            ax_prob_rf.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.02,
+                                          f'{prob:.1%}', ha='center', va='bottom', fontsize=10)
+                        st.pyplot(fig_prob_rf)
                 
-                with col_res2:
-                    st.info(f"**Точность модели:**\n**{acc:.1%}**")
-                
-                # Визуализация вероятностей
-                if hasattr(model, 'predict_proba'):
-                    st.subheader("Вероятности принадлежности к классам:")
-                    
-                    prob_df = pd.DataFrame({
-                        'Вид': ['setosa', 'versicolor', 'virginica'],
-                        'Вероятность': probabilities
-                    }).sort_values('Вероятность', ascending=False)
-                    
-                    fig_prob, ax_prob = plt.subplots(figsize=(8, 4))
-                    colors = ['red' if p == max(probabilities) else 'gray' for p in probabilities]
-                    bars = ax_prob.bar(prob_df['Вид'], prob_df['Вероятность'], color=colors)
-                    ax_prob.set_ylabel('Вероятность')
-                    ax_prob.set_title('Распределение вероятностей по классам')
-                    ax_prob.set_ylim(0, 1.1)
-                    
-                    # Добавляем значения на столбцы
-                    for bar, prob in zip(bars, prob_df['Вероятность']):
-                        height = bar.get_height()
-                        ax_prob.text(bar.get_x() + bar.get_width()/2., height + 0.02,
-                                   f'{prob:.1%}', ha='center', va='bottom', fontsize=10)
-                    
-                    st.pyplot(fig_prob)
+                if model_choice == "Обе модели" and prediction_lr != prediction_rf:
+                    st.warning(f"⚠️ **Модели расходятся во мнениях!**\n"
+                              f"- Logistic Regression: {species_names[prediction_lr]}\n"
+                              f"- Random Forest: {species_names[prediction_rf]}")
                 
                 # Показываем введённые значения
                 st.markdown("**Введённые параметры:**")

@@ -449,7 +449,7 @@ elif page == " Классификация":
         fig_imp, ax_imp = plt.subplots(figsize=(8, 4))
         ax_imp.barh(feature_importance['Признак'], feature_importance['Важность'], color='lightgreen')
         ax_imp.set_xlabel('Средняя |коэффициент|')
-        ax_imp.set_title('Важность признаков (Logistic Regression)')
+        ax_imp.set_title('Важность признаков')
         st.pyplot(fig_imp)
         st.dataframe(feature_importance.round(4), use_container_width=True)
 

@@ -453,7 +453,7 @@ elif page == " Классификация":
         tab_lr, tab_rf, tab_compare = st.tabs(["Logistic Regression", "Random Forest", "Сравнение"])
         
         with tab_lr:
-            st.subheader("📊 Logistic Regression")
+            st.subheader("Logistic Regression")
             
             # Важность признаков для LR
             coefs_lr = np.abs(model_lr.coef_)
@@ -492,7 +492,7 @@ elif page == " Классификация":
             st.dataframe(report_df_lr.round(3), use_container_width=True)
         
         with tab_rf:
-            st.subheader("🌲 Random Forest")
+            st.subheader("Random Forest")
             
             # Важность признаков для RF
             feature_importance_rf = pd.DataFrame({
@@ -608,7 +608,7 @@ elif page == " Классификация":
             """)
 
         # ------ Интерактивный прогноз ------
-        st.subheader("🔮 Интерактивный прогноз")
+        st.subheader(" Интерактивный прогноз")
         st.markdown("Введите параметры цветка для предсказания вида:")
         
         with st.form("prediction_form"):

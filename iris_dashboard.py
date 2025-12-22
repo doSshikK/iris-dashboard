@@ -715,68 +715,55 @@ elif page == " Классификация":
                 })
                 st.dataframe(params_df, use_container_width=True)
                 
-# ------------- Страница: Метрики и выводы -------------
+# -------------Метрики и выводы -------------
 elif page == " Метрики / Выводы":
     st.title("📈 Метрики и ключевые выводы")
-
-    st.subheader("Ключевые инсайты")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("""
-        - **Виды хорошо разделяются** по признакам лепестков (особенно petal length/width).  
-        - **Setosa** обычно отделяется очень чётко от остальных.  
-        - Основная путаница наблюдается между **versicolor** и **virginica**.
-        """)
-    with col2:
-        corr = df_filtered.iloc[:, :4].corr()
-        st.markdown("**Корреляции (часть матрицы):**")
-        st.dataframe(corr.round(3), use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("Результаты моделей (сводно)")
-
-    # Кластеризация k=3 для сводной метрики
+    
+    # Кластеризация
+    st.subheader("🤖 Кластеризация")
     X_full = df_filtered.iloc[:, :4].values
     kmeans3 = KMeans(n_clusters=3, random_state=42, n_init=10)
     labels3 = kmeans3.fit_predict(X_full)
     sil3 = silhouette_score(X_full, labels3)
-    st.markdown(f"**Кластеризация (KMeans, k=3)** — Silhouette: `{sil3:.3f}`")
-
-    # Классификация: тренировочный прогон на всем датасете (кросс-валидация не включена здесь,
-    # но мы можем показать обученную модель на полном наборе и её важности признаков)
+    
+    st.metric("Оптимальное количество кластеров", "3")
+    st.metric("Качество кластеризации", f"{sil3:.3f}")
+    
+    # Классификация
+    st.subheader("🎯 Классификация")
+    
     if df_filtered['species'].nunique() >= 2:
-        st.subheader("Важность признаков (Logistic Regression)")
-        # Обучаем на полном наборе (стандартизированном)
+        # Обучаем обе модели
         X_all = df_filtered.iloc[:, :4]
         y_all = df_filtered['species']
         scaler_full = StandardScaler()
         X_all_scaled = scaler_full.fit_transform(X_all)
-        model_full = LogisticRegression(random_state=42, max_iter=300)
-        model_full.fit(X_all_scaled, y_all)
-        # Для мультиклассовой логистической регрессии берём среднюю абсолютную важность по классам
-        coefs = np.abs(model_full.coef_)  # shape (n_classes, n_features)
-        importance_vals = coefs.mean(axis=0)
-        importance_df = pd.DataFrame({
-            'Признак': X_all.columns,
-            'Importance': importance_vals
-        }).sort_values('Importance', ascending=False)
-        st.dataframe(importance_df.round(4), use_container_width=True)
-
-        # Горизонтальный бар для важности
-        fig, ax = plt.subplots(figsize=(8, 4))
-        ax.barh(importance_df['Признак'], importance_df['Importance'])
-        ax.set_xlabel('Средняя |коэффициент|')
-        ax.set_title('Важность признаков (Logistic Regression)')
-        st.pyplot(fig)
-
-    st.markdown("---")
-    st.success("""
-    **Рекомендации:**
-    1. Для классификации достаточны признаки лепестков (petal length & petal width).  
-    2. KMeans с k=3 соответствует биологической интуиции и даёт хорошую сегрегацию.  
-    3. Логистическая регрессия показывает высокую точность на Iris; для более надёжной оценки
-       стоит добавить кросс-валидацию.
-    4. Random Forest дополнительно предоставляет важность признаков для интерпретации.
+        
+        # LR
+        model_lr = LogisticRegression(random_state=42, max_iter=300)
+        model_lr.fit(X_all_scaled, y_all)
+        acc_lr = accuracy_score(y_all, model_lr.predict(X_all_scaled))
+        
+        # RF
+        model_rf = RandomForestClassifier(random_state=42, n_estimators=100)
+        model_rf.fit(X_all_scaled, y_all)
+        acc_rf = accuracy_score(y_all, model_rf.predict(X_all_scaled))
+        
+        # Метрики
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Logistic Regression", f"{acc_lr:.1%}")
+        with col2:
+            st.metric("Random Forest", f"{acc_rf:.1%}")
+    
+    # Выводы
+    st.subheader("💡 Выводы")
+    st.markdown("""
+    1. **Оптимально 3 кластера** - соответствуют биологическим видам
+    2. **Setosa отделяется идеально** - обе модели без ошибок
+    3. **Основные ошибки** - между versicolor и virginica
+    4. **Признаки лепестка** - самые важные для классификации
+    5. **Random Forest точнее** - показывает более высокую accuracy
     """)
 
 # ------------- Футер -------------

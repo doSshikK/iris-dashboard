@@ -573,7 +573,7 @@ elif page == " Классификация":
                 
                 with col_res3:
                     if prediction_lr == prediction_rf:
-                        st.success("✅ Правильно предсказали")
+                        st.success("✅ Предсказание верное")
                     else:
                         st.error("❌ Предсказания различаются")
                 

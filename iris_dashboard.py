@@ -218,7 +218,7 @@ if page == " Визуализация данных":
     st.pyplot(fig)
 
     # Pie chart (распределение по видам)
-    st.subheader("🥧 Распределение по видам")
+    st.subheader("Распределение по видам")
     species_counts = df_filtered['species_name'].value_counts()
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -230,7 +230,7 @@ if page == " Визуализация данных":
         st.dataframe(species_counts.rename("Количество").to_frame(), use_container_width=True)
 
     # Корреляционная матрица
-    st.subheader("🔥 Корреляционная матрица")
+    st.subheader("Корреляционная матрица")
     fig2, ax2 = plt.subplots(figsize=(8, 6))
     correlation_matrix = df_filtered.iloc[:, :4].corr()
     sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0, ax=ax2, fmt='.2f')
@@ -315,7 +315,7 @@ elif page == " Анализ данных":
 
 # ------------- Страница: Кластеризация -------------
 elif page == " Кластеризация":
-    st.title("🤖 Кластеризация")
+    st.title("Кластеризация")
 
     X = df_filtered.iloc[:, :4].values
 

@@ -715,23 +715,33 @@ elif page == " Классификация":
                 })
                 st.dataframe(params_df, use_container_width=True)
                 
-# -------------Метрики и выводы -------------
+# ------------- Страница: Метрики и выводы -------------
 elif page == " Метрики / Выводы":
     st.title("📈 Метрики и ключевые выводы")
-    
+
+    st.subheader("Ключевые инсайты")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("""
+        - **Виды хорошо разделяются** по признакам лепестков
+        - **Setosa** отделяется чётко от остальных
+        - **Versicolor и virginica** имеют схожие характеристики
+        """)
+    with col2:
+        corr = df_filtered.iloc[:, :4].corr()
+        st.dataframe(corr.round(3), use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("Результаты моделей")
+
     # Кластеризация
-    st.subheader("🤖 Кластеризация")
     X_full = df_filtered.iloc[:, :4].values
     kmeans3 = KMeans(n_clusters=3, random_state=42, n_init=10)
     labels3 = kmeans3.fit_predict(X_full)
     sil3 = silhouette_score(X_full, labels3)
-    
-    st.metric("Оптимальное количество кластеров", "3")
-    st.metric("Качество кластеризации", f"{sil3:.3f}")
-    
+    st.markdown(f"**Кластеризация (KMeans, k=3)** — Silhouette: `{sil3:.3f}`")
+
     # Классификация
-    st.subheader("🎯 Классификация")
-    
     if df_filtered['species'].nunique() >= 2:
         # Обучаем обе модели
         X_all = df_filtered.iloc[:, :4]
@@ -739,31 +749,36 @@ elif page == " Метрики / Выводы":
         scaler_full = StandardScaler()
         X_all_scaled = scaler_full.fit_transform(X_all)
         
-        # LR
+        # Logistic Regression
         model_lr = LogisticRegression(random_state=42, max_iter=300)
         model_lr.fit(X_all_scaled, y_all)
-        acc_lr = accuracy_score(y_all, model_lr.predict(X_all_scaled))
+        y_pred_lr = model_lr.predict(X_all_scaled)
+        acc_lr = accuracy_score(y_all, y_pred_lr)
         
-        # RF
+        # Random Forest
         model_rf = RandomForestClassifier(random_state=42, n_estimators=100)
         model_rf.fit(X_all_scaled, y_all)
-        acc_rf = accuracy_score(y_all, model_rf.predict(X_all_scaled))
+        y_pred_rf = model_rf.predict(X_all_scaled)
+        acc_rf = accuracy_score(y_all, y_pred_rf)
         
-        # Метрики
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Logistic Regression", f"{acc_lr:.1%}")
-        with col2:
-            st.metric("Random Forest", f"{acc_rf:.1%}")
-    
-    # Выводы
-    st.subheader("💡 Выводы")
-    st.markdown("""
-    1. **Оптимально 3 кластера** - соответствуют биологическим видам
-    2. **Setosa отделяется идеально** - обе модели без ошибок
-    3. **Основные ошибки** - между versicolor и virginica
-    4. **Признаки лепестка** - самые важные для классификации
-    5. **Random Forest точнее** - показывает более высокую accuracy
+        # Сравнение точности
+        st.markdown(f"**Logistic Regression** — Accuracy: `{acc_lr:.3f}`")
+        st.markdown(f"**Random Forest** — Accuracy: `{acc_rf:.3f}`")
+        
+        # Важность признаков
+        importance_df = pd.DataFrame({
+            'Признак': X_all.columns,
+            'LR Важность': np.abs(model_lr.coef_).mean(axis=0),
+            'RF Важность': model_rf.feature_importances_
+        })
+        st.dataframe(importance_df.round(4), use_container_width=True)
+
+    st.markdown("---")
+    st.success("""
+    **Рекомендации:**
+    1. Для классификации используйте Random Forest — выше точность
+    2. KMeans с k=3 хорошо разделяет данные
+    3. Самые важные признаки — длина и ширина лепестка
     """)
 
 # ------------- Футер -------------

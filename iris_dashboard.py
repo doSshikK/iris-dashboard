@@ -12,7 +12,6 @@ from sklearn.metrics import silhouette_score, confusion_matrix, accuracy_score, 
 from scipy.cluster import hierarchy
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-# ДОБАВЛЕНО для Random Forest
 from sklearn.ensemble import RandomForestClassifier
 
 # ------------- Настройка страницы -------------
@@ -769,25 +768,30 @@ elif page == " Метрики / Выводы":
     st.subheader("🎯 Результаты классификации")
     
     if df_filtered['species'].nunique() >= 2:
-        # Обучаем обе модели на полном наборе для сравнения
+        # Используем ТОТ ЖЕ подход, что и на странице "Классификация"
         X_all = df_filtered.iloc[:, :4]
         y_all = df_filtered['species']
         scaler_full = StandardScaler()
         X_all_scaled = scaler_full.fit_transform(X_all)
         
+        # Разделяем на train/test (80/20) КАК НА СТРАНИЦЕ "КЛАССИФИКАЦИЯ"
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_all_scaled, y_all, test_size=0.2, random_state=42, stratify=y_all
+        )
+        
         # Logistic Regression
         model_lr_full = LogisticRegression(random_state=42, max_iter=300)
-        model_lr_full.fit(X_all_scaled, y_all)
-        y_pred_lr_full = model_lr_full.predict(X_all_scaled)
-        acc_lr_full = accuracy_score(y_all, y_pred_lr_full)
+        model_lr_full.fit(X_train, y_train)
+        y_pred_lr_full = model_lr_full.predict(X_test)  # Только test!
+        acc_lr_full = accuracy_score(y_test, y_pred_lr_full)
         
         # Random Forest
         model_rf_full = RandomForestClassifier(random_state=42, n_estimators=100)
-        model_rf_full.fit(X_all_scaled, y_all)
-        y_pred_rf_full = model_rf_full.predict(X_all_scaled)
-        acc_rf_full = accuracy_score(y_all, y_pred_rf_full)
+        model_rf_full.fit(X_train, y_train)
+        y_pred_rf_full = model_rf_full.predict(X_test)  # Только test!
+        acc_rf_full = accuracy_score(y_test, y_pred_rf_full)
         
-        # Важность признаков для обеих моделей
+        # Важность признаков обучаем на train
         coefs_lr = np.abs(model_lr_full.coef_)
         importance_lr = coefs_lr.mean(axis=0)
         importance_rf = model_rf_full.feature_importances_
@@ -839,9 +843,9 @@ elif page == " Метрики / Выводы":
         # Анализ ошибок классификации
         st.subheader("🔍 Анализ ошибок классификации")
         
-        # Создаем confusion matrices для обеих моделей
-        cm_lr = confusion_matrix(y_all, y_pred_lr_full)
-        cm_rf = confusion_matrix(y_all, y_pred_rf_full)
+        # Создаем confusion matrices для обеих моделей (только test!)
+        cm_lr = confusion_matrix(y_test, y_pred_lr_full)
+        cm_rf = confusion_matrix(y_test, y_pred_rf_full)
         
         # Находим наиболее проблемные классы
         error_analysis = pd.DataFrame({
@@ -884,30 +888,6 @@ elif page == " Метрики / Выводы":
         - Ожидаемая точность: **95-100%** для setosa
         - **85-95%** для versicolor/virginica
         """)
-    
-    st.markdown("---")
-    
-    # ------ Заключение ------
-    st.subheader("Заключение")
-    
-    st.success("""
-    **Итоги работы:**
-    
-    1. **Анализ данных успешен** - датасет Iris хорошо структурирован и пригоден для демонстрации методов машинного обучения
-    
-    2. **Кластеризация подтверждает биологическую классификацию** - K-means с k=3 естественным образом выделяет три вида ирисов
-    
-    3. **Классификация эффективна** - обе модели показывают высокую точность (>90%)
-        - **Logistic Regression**: простая, быстрая, интерпретируемая
-        - **Random Forest**: более точная, устойчивая к переобучению
-    
-    4. **Дашборд функционален** - обеспечивает полный цикл анализа данных от визуализации до интерактивного прогноза
-    
-    5. **Методы воспроизводимы** - подходы могут быть применены к другим задачам классификации
-    
-    **Практическая значимость:** Разработанный инструмент может использоваться как учебное пособие, 
-    шаблон для других дашбордов и прототип системы автоматической классификации растений.
-    """)
 
 # ------------- Футер -------------
 st.markdown("---")

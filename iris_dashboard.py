@@ -418,7 +418,7 @@ elif page == " Классификация":
             )
 
         # ------ Обучение двух моделей ------
-        st.subheader("🤖 Сравнение моделей классификации")
+        st.subheader("Сравнение моделей классификации")
         
         # Создаем две модели
         model_lr = LogisticRegression(random_state=42, max_iter=300)
@@ -439,13 +439,13 @@ elif page == " Классификация":
         # ------ Сравнение метрик ------
         col_metrics1, col_metrics2, col_metrics3 = st.columns(3)
         with col_metrics1:
-            st.metric("📊 Logistic Regression", f"{acc_lr:.3f}", 
+            st.metric("Logistic Regression", f"{acc_lr:.3f}", 
                      delta=f"{(acc_lr - acc_rf):+.3f}" if acc_lr != acc_rf else "0.000")
         with col_metrics2:
-            st.metric("🌲 Random Forest", f"{acc_rf:.3f}",
+            st.metric("Random Forest", f"{acc_rf:.3f}",
                      delta=f"{(acc_rf - acc_lr):+.3f}" if acc_rf != acc_lr else "0.000")
         with col_metrics3:
-            st.metric("📈 Разница", f"{abs(acc_lr - acc_rf):.3f}",
+            st.metric("Разница", f"{abs(acc_lr - acc_rf):.3f}",
                      delta="Лучше LR" if acc_lr > acc_rf else "Лучше RF" if acc_rf > acc_lr else "Равны")
 
         # ------ Детальное сравнение в табах ------
@@ -675,7 +675,7 @@ elif page == " Классификация":
                         st.pyplot(fig_prob_lr)
                 
                 if model_choice == "Random Forest" or model_choice == "Обе модели":
-                    st.subheader("🌲 Random Forest")
+                    st.subheader("Random Forest")
                     col_rf1, col_rf2 = st.columns(2)
                     with col_rf1:
                         st.success(f"**Предсказанный вид:**\n**{species_names[prediction_rf].upper()}**")

@@ -12,6 +12,8 @@ from sklearn.metrics import silhouette_score, confusion_matrix, accuracy_score, 
 from scipy.cluster import hierarchy
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
+# ДОБАВЛЕНО для Random Forest
+from sklearn.ensemble import RandomForestClassifier
 
 # ------------- Настройка страницы -------------
 st.set_page_config(
@@ -418,12 +420,16 @@ elif page == " Классификация":
                 X_scaled, y, test_size=test_size / 100, random_state=42
             )
 
-        # Обучение модели
-        model = LogisticRegression(random_state=42, max_iter=300)
-        model.fit(X_train, y_train)
+        # Обучение модели логистической регрессии
+        model_lr = LogisticRegression(random_state=42, max_iter=300)
+        model_lr.fit(X_train, y_train)
+        
+        # Обучение модели Random Forest для важности признаков
+        model_rf = RandomForestClassifier(n_estimators=100, random_state=42)
+        model_rf.fit(X_train, y_train)
 
         # Предсказания
-        y_pred = model.predict(X_test)
+        y_pred = model_lr.predict(X_test)
         acc = accuracy_score(y_test, y_pred)
 
         col1, col2, col3 = st.columns(3)
@@ -434,90 +440,41 @@ elif page == " Классификация":
         with col3:
             st.metric("Test size", X_test.shape[0])
 
-        # ----- ДОБАВЛЕНО: Важность признаков -----
-        st.subheader("📊 Важность признаков (Logistic Regression)")
+        # ---------- ДОБАВЛЕНО: Важность признаков ----------
+        st.subheader("📊 Важность признаков (Random Forest)")
         
-        # Получаем коэффициенты модели (абсолютные значения для важности)
-        feature_importance = pd.DataFrame({
+        # Важность признаков из Random Forest
+        feature_importance_rf = pd.DataFrame({
             'Признак': X.columns,
-            'Коэффициент': model.coef_[0] if len(model.coef_) == 1 else model.coef_.mean(axis=0),
-            'Абсолютная важность': np.abs(model.coef_[0]) if len(model.coef_) == 1 else np.abs(model.coef_).mean(axis=0)
-        }).sort_values('Абсолютная важность', ascending=False)
+            'Важность': model_rf.feature_importances_
+        }).sort_values('Важность', ascending=False)
         
-        # Показываем таблицу важности
-        st.dataframe(feature_importance.round(4), use_container_width=True)
+        # Важность признаков из Logistic Regression
+        coefs_lr = np.abs(model_lr.coef_)
+        feature_importance_lr = pd.DataFrame({
+            'Признак': X.columns,
+            'Важность': coefs_lr.mean(axis=0)
+        }).sort_values('Важность', ascending=False)
         
-        # Визуализация важности признаков
-        fig_importance, ax_importance = plt.subplots(figsize=(8, 4))
-        colors = ['skyblue' if x >= 0 else 'lightcoral' for x in feature_importance['Коэффициент']]
-        bars = ax_importance.barh(feature_importance['Признак'], feature_importance['Коэффициент'], color=colors)
-        ax_importance.set_xlabel('Коэффициент (отрицательный = менее важный)')
-        ax_importance.set_title('Важность признаков в логистической регрессии')
-        ax_importance.axvline(x=0, color='gray', linestyle='--', linewidth=0.8)
+        col_imp1, col_imp2 = st.columns(2)
         
-        # Добавляем значения на столбцы
-        for bar, val in zip(bars, feature_importance['Коэффициент']):
-            width = bar.get_width()
-            ax_importance.text(width + (0.01 if width >= 0 else -0.05), bar.get_y() + bar.get_height()/2,
-                             f'{val:.3f}', va='center', fontsize=9,
-                             color='black' if abs(width) > 0.1 else 'gray')
+        with col_imp1:
+            st.markdown("**Random Forest:**")
+            fig_rf, ax_rf = plt.subplots(figsize=(6, 4))
+            ax_rf.barh(feature_importance_rf['Признак'], feature_importance_rf['Важность'], color='skyblue')
+            ax_rf.set_xlabel('Важность признака')
+            ax_rf.set_title('Random Forest')
+            st.pyplot(fig_rf)
+            st.dataframe(feature_importance_rf.round(4), use_container_width=True)
         
-        st.pyplot(fig_importance)
-
-        # ----- ДОБАВЛЕНО: Интерактивный прогноз -----
-        st.subheader("🔮 Интерактивный классификатор")
-        st.markdown("Введите параметры цветка для предсказания вида:")
-        
-        col_in1, col_in2 = st.columns(2)
-        with col_in1:
-            sepal_length = st.number_input("Длина чашелистика (см):", 
-                                          min_value=0.0, max_value=10.0, value=5.0, step=0.1)
-            sepal_width = st.number_input("Ширина чашелистика (см):", 
-                                         min_value=0.0, max_value=10.0, value=3.0, step=0.1)
-        with col_in2:
-            petal_length = st.number_input("Длина лепестка (см):", 
-                                          min_value=0.0, max_value=10.0, value=1.5, step=0.1)
-            petal_width = st.number_input("Ширина лепестка (см):", 
-                                         min_value=0.0, max_value=10.0, value=0.2, step=0.1)
-        
-        # Создаем массив для предсказания
-        user_input = np.array([[sepal_length, sepal_width, petal_length, petal_width]])
-        user_input_scaled = scaler.transform(user_input)
-        
-        # Получаем предсказание и вероятности
-        prediction = model.predict(user_input_scaled)[0]
-        probabilities = model.predict_proba(user_input_scaled)[0]
-        
-        # Отображаем результат
-        species_names = {0: 'setosa', 1: 'versicolor', 2: 'virginica'}
-        predicted_species = species_names[prediction]
-        
-        st.markdown(f"### 🎯 Предсказанный вид: **{predicted_species}**")
-        
-        # Показываем вероятности
-        st.markdown("#### Вероятности по классам:")
-        prob_df = pd.DataFrame({
-            'Вид': ['setosa', 'versicolor', 'virginica'],
-            'Вероятность (%)': (probabilities * 100).round(2)
-        }).sort_values('Вероятность (%)', ascending=False)
-        
-        st.dataframe(prob_df, use_container_width=True)
-        
-        # Визуализация вероятностей
-        fig_prob, ax_prob = plt.subplots(figsize=(8, 3))
-        colors_prob = ['#FF6B6B', '#4ECDC4', '#45B7D1']
-        bars_prob = ax_prob.barh(prob_df['Вид'], prob_df['Вероятность (%)'], color=colors_prob)
-        ax_prob.set_xlabel('Вероятность (%)')
-        ax_prob.set_title('Распределение вероятностей')
-        ax_prob.set_xlim(0, 100)
-        
-        # Добавляем значения на столбцы
-        for bar, prob in zip(bars_prob, prob_df['Вероятность (%)']):
-            width = bar.get_width()
-            ax_prob.text(width + 1, bar.get_y() + bar.get_height()/2,
-                        f'{prob}%', va='center', fontsize=10, fontweight='bold')
-        
-        st.pyplot(fig_prob)
+        with col_imp2:
+            st.markdown("**Logistic Regression:**")
+            fig_lr, ax_lr = plt.subplots(figsize=(6, 4))
+            ax_lr.barh(feature_importance_lr['Признак'], feature_importance_lr['Важность'], color='lightgreen')
+            ax_lr.set_xlabel('Средняя |коэффициент|')
+            ax_lr.set_title('Logistic Regression')
+            st.pyplot(fig_lr)
+            st.dataframe(feature_importance_lr.round(4), use_container_width=True)
 
         st.subheader("Матрица ошибок (Confusion Matrix)")
         cm = confusion_matrix(y_test, y_pred)
@@ -564,6 +521,96 @@ elif page == " Классификация":
         ax.set_title('Результаты классификации (зелёные = правильно, красные = ошибки)')
         ax.legend()
         st.pyplot(fig)
+
+        # ---------- ДОБАВЛЕНО: Интерактивный прогноз ----------
+        st.subheader("🔮 Интерактивный прогноз")
+        st.markdown("Введите параметры цветка для предсказания вида:")
+        
+        with st.form("prediction_form"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                sepal_length = st.number_input("Длина чашелистика (см):", 
+                                              min_value=0.1, max_value=10.0, 
+                                              value=5.0, step=0.1)
+                sepal_width = st.number_input("Ширина чашелистика (см):", 
+                                             min_value=0.1, max_value=10.0, 
+                                             value=3.5, step=0.1)
+            
+            with col2:
+                petal_length = st.number_input("Длина лепестка (см):", 
+                                              min_value=0.1, max_value=10.0, 
+                                              value=1.5, step=0.1)
+                petal_width = st.number_input("Ширина лепестка (см):", 
+                                             min_value=0.1, max_value=10.0, 
+                                             value=0.2, step=0.1)
+            
+            submitted = st.form_submit_button("Предсказать вид")
+            
+            if submitted:
+                # Подготовка входных данных
+                input_data = np.array([[sepal_length, sepal_width, petal_length, petal_width]])
+                input_scaled = scaler.transform(input_data)
+                
+                # Предсказание от обеих моделей
+                prediction_lr = model_lr.predict(input_scaled)[0]
+                prediction_rf = model_rf.predict(input_scaled)[0]
+                
+                # Вероятности (только для LR, так как она имеет predict_proba)
+                if hasattr(model_lr, 'predict_proba'):
+                    probabilities = model_lr.predict_proba(input_scaled)[0]
+                
+                # Отображение результатов
+                species_names = {0: 'setosa', 1: 'versicolor', 2: 'virginica'}
+                
+                col_res1, col_res2, col_res3 = st.columns(3)
+                
+                with col_res1:
+                    st.success(f"**Logistic Regression:**\n**{species_names[prediction_lr].upper()}**")
+                
+                with col_res2:
+                    st.info(f"**Random Forest:**\n**{species_names[prediction_rf].upper()}**")
+                
+                with col_res3:
+                    if prediction_lr == prediction_rf:
+                        st.balloons()
+                        st.success("✅ Модели согласны!")
+                    else:
+                        st.warning("⚠️ Модели расходятся во мнениях")
+                
+                # Визуализация вероятностей
+                if hasattr(model_lr, 'predict_proba'):
+                    st.subheader("Вероятности принадлежности к классам (LR):")
+                    
+                    prob_df = pd.DataFrame({
+                        'Вид': ['setosa', 'versicolor', 'virginica'],
+                        'Вероятность': probabilities
+                    }).sort_values('Вероятность', ascending=False)
+                    
+                    fig_prob, ax_prob = plt.subplots(figsize=(8, 4))
+                    colors = ['red' if p == max(probabilities) else 'gray' for p in probabilities]
+                    bars = ax_prob.bar(prob_df['Вид'], prob_df['Вероятность'], color=colors)
+                    ax_prob.set_ylabel('Вероятность')
+                    ax_prob.set_title('Распределение вероятностей по классам')
+                    ax_prob.set_ylim(0, 1.1)
+                    
+                    # Добавляем значения на столбцы
+                    for bar, prob in zip(bars, prob_df['Вероятность']):
+                        height = bar.get_height()
+                        ax_prob.text(bar.get_x() + bar.get_width()/2., height + 0.02,
+                                   f'{prob:.1%}', ha='center', va='bottom', fontsize=10)
+                    
+                    st.pyplot(fig_prob)
+                
+                # Показываем введённые значения
+                st.markdown("**Введённые параметры:**")
+                params_df = pd.DataFrame({
+                    'Признак': ['Длина чашелистика', 'Ширина чашелистика', 
+                               'Длина лепестка', 'Ширина лепестка'],
+                    'Значение': [sepal_length, sepal_width, petal_length, petal_width],
+                    'Единица': ['см', 'см', 'см', 'см']
+                })
+                st.dataframe(params_df, use_container_width=True)
 
 # ------------- Страница: Метрики и выводы -------------
 elif page == " Метрики / Выводы":
@@ -626,6 +673,7 @@ elif page == " Метрики / Выводы":
     2. KMeans с k=3 соответствует биологической интуиции и даёт хорошую сегрегацию.  
     3. Логистическая регрессия показывает высокую точность на Iris; для более надёжной оценки
        стоит добавить кросс-валидацию.
+    4. Random Forest дополнительно предоставляет важность признаков для интерпретации.
     """)
 
 # ------------- Футер -------------

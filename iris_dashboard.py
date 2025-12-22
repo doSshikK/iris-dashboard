@@ -12,9 +12,6 @@ from sklearn.metrics import silhouette_score, confusion_matrix, accuracy_score, 
 from scipy.cluster import hierarchy
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-# ДОБАВЛЕНО: Импорт новых моделей
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
 
 # ------------- Настройка страницы -------------
 st.set_page_config(
@@ -392,7 +389,7 @@ elif page == " Кластеризация":
 elif page == " Классификация":
     st.title("🎯 Классификация видов ирисов")
 
-    st.info("Сравнение трёх моделей классификации: Логистическая регрессия, Random Forest и SVM.")
+    st.info("Модель логистической регрессии используется для мультиклассовой классификации (setosa / versicolor / virginica).")
 
     # Проверка, что есть хотя бы 2 разных класса для классификации
     if df_filtered['species'].nunique() < 2:
@@ -421,80 +418,106 @@ elif page == " Классификация":
                 X_scaled, y, test_size=test_size / 100, random_state=42
             )
 
-        # ---------- ДОБАВЛЕНО: Выбор модели ----------
-        model_type = st.selectbox(
-            "Выберите модель для классификации:",
-            ["Логистическая регрессия", "Random Forest", "SVM (Support Vector Machine)"],
-            index=0
-        )
-        
-        # Инициализация выбранной модели
-        if model_type == "Логистическая регрессия":
-            model = LogisticRegression(random_state=42, max_iter=300)
-            model_name = "Logistic Regression"
-        elif model_type == "Random Forest":
-            n_estimators = st.slider("Количество деревьев (n_estimators):", 10, 200, 100)
-            model = RandomForestClassifier(n_estimators=n_estimators, random_state=42)
-            model_name = f"Random Forest (n={n_estimators})"
-        else:  # SVM
-            kernel = st.selectbox("Ядро SVM:", ["linear", "rbf", "poly"], index=1)
-            model = SVC(kernel=kernel, probability=True, random_state=42)
-            model_name = f"SVM (kernel={kernel})"
-
         # Обучение модели
+        model = LogisticRegression(random_state=42, max_iter=300)
         model.fit(X_train, y_train)
 
         # Предсказания
         y_pred = model.predict(X_test)
         acc = accuracy_score(y_test, y_pred)
 
-        # ---------- ДОБАВЛЕНО: Сравнение моделей ----------
-        st.subheader("📊 Сравнение моделей")
-        
-        # Создаём и обучаем все модели для сравнения
-        models = {
-            "Logistic Regression": LogisticRegression(random_state=42, max_iter=300),
-            "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
-            "SVM (rbf)": SVC(kernel='rbf', probability=True, random_state=42)
-        }
-        
-        results = {}
-        for name, mdl in models.items():
-            mdl.fit(X_train, y_train)
-            y_pred_mdl = mdl.predict(X_test)
-            results[name] = accuracy_score(y_test, y_pred_mdl)
-        
-        # Таблица сравнения
-        comparison_df = pd.DataFrame({
-            "Модель": list(results.keys()),
-            "Accuracy": list(results.values())
-        }).sort_values("Accuracy", ascending=False)
-        
-        st.dataframe(comparison_df.round(3), use_container_width=True)
-        
-        # Визуализация сравнения
-        fig_compare, ax_compare = plt.subplots(figsize=(8, 4))
-        colors = ['skyblue', 'lightgreen', 'lightcoral']
-        bars = ax_compare.bar(comparison_df["Модель"], comparison_df["Accuracy"], color=colors[:len(comparison_df)])
-        ax_compare.set_ylabel("Accuracy")
-        ax_compare.set_title("Сравнение точности моделей")
-        ax_compare.set_ylim(0, 1.05)
-        
-        # Добавляем значения на столбцы
-        for bar, acc in zip(bars, comparison_df["Accuracy"]):
-            height = bar.get_height()
-            ax_compare.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                           f'{acc:.3f}', ha='center', va='bottom', fontsize=10)
-        
-        st.pyplot(fig_compare)
-
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Accuracy", f"{acc:.3f}", delta=f"{acc - 0.5:.3f}" if acc > 0.5 else None)
+            st.metric("Accuracy", f"{acc:.3f}")
         with col2:
             st.metric("Train size", X_train.shape[0])
         with col3:
             st.metric("Test size", X_test.shape[0])
+
+        # ----- ДОБАВЛЕНО: Важность признаков -----
+        st.subheader("📊 Важность признаков (Logistic Regression)")
+        
+        # Получаем коэффициенты модели (абсолютные значения для важности)
+        feature_importance = pd.DataFrame({
+            'Признак': X.columns,
+            'Коэффициент': model.coef_[0] if len(model.coef_) == 1 else model.coef_.mean(axis=0),
+            'Абсолютная важность': np.abs(model.coef_[0]) if len(model.coef_) == 1 else np.abs(model.coef_).mean(axis=0)
+        }).sort_values('Абсолютная важность', ascending=False)
+        
+        # Показываем таблицу важности
+        st.dataframe(feature_importance.round(4), use_container_width=True)
+        
+        # Визуализация важности признаков
+        fig_importance, ax_importance = plt.subplots(figsize=(8, 4))
+        colors = ['skyblue' if x >= 0 else 'lightcoral' for x in feature_importance['Коэффициент']]
+        bars = ax_importance.barh(feature_importance['Признак'], feature_importance['Коэффициент'], color=colors)
+        ax_importance.set_xlabel('Коэффициент (отрицательный = менее важный)')
+        ax_importance.set_title('Важность признаков в логистической регрессии')
+        ax_importance.axvline(x=0, color='gray', linestyle='--', linewidth=0.8)
+        
+        # Добавляем значения на столбцы
+        for bar, val in zip(bars, feature_importance['Коэффициент']):
+            width = bar.get_width()
+            ax_importance.text(width + (0.01 if width >= 0 else -0.05), bar.get_y() + bar.get_height()/2,
+                             f'{val:.3f}', va='center', fontsize=9,
+                             color='black' if abs(width) > 0.1 else 'gray')
+        
+        st.pyplot(fig_importance)
+
+        # ----- ДОБАВЛЕНО: Интерактивный прогноз -----
+        st.subheader("🔮 Интерактивный классификатор")
+        st.markdown("Введите параметры цветка для предсказания вида:")
+        
+        col_in1, col_in2 = st.columns(2)
+        with col_in1:
+            sepal_length = st.number_input("Длина чашелистика (см):", 
+                                          min_value=0.0, max_value=10.0, value=5.0, step=0.1)
+            sepal_width = st.number_input("Ширина чашелистика (см):", 
+                                         min_value=0.0, max_value=10.0, value=3.0, step=0.1)
+        with col_in2:
+            petal_length = st.number_input("Длина лепестка (см):", 
+                                          min_value=0.0, max_value=10.0, value=1.5, step=0.1)
+            petal_width = st.number_input("Ширина лепестка (см):", 
+                                         min_value=0.0, max_value=10.0, value=0.2, step=0.1)
+        
+        # Создаем массив для предсказания
+        user_input = np.array([[sepal_length, sepal_width, petal_length, petal_width]])
+        user_input_scaled = scaler.transform(user_input)
+        
+        # Получаем предсказание и вероятности
+        prediction = model.predict(user_input_scaled)[0]
+        probabilities = model.predict_proba(user_input_scaled)[0]
+        
+        # Отображаем результат
+        species_names = {0: 'setosa', 1: 'versicolor', 2: 'virginica'}
+        predicted_species = species_names[prediction]
+        
+        st.markdown(f"### 🎯 Предсказанный вид: **{predicted_species}**")
+        
+        # Показываем вероятности
+        st.markdown("#### Вероятности по классам:")
+        prob_df = pd.DataFrame({
+            'Вид': ['setosa', 'versicolor', 'virginica'],
+            'Вероятность (%)': (probabilities * 100).round(2)
+        }).sort_values('Вероятность (%)', ascending=False)
+        
+        st.dataframe(prob_df, use_container_width=True)
+        
+        # Визуализация вероятностей
+        fig_prob, ax_prob = plt.subplots(figsize=(8, 3))
+        colors_prob = ['#FF6B6B', '#4ECDC4', '#45B7D1']
+        bars_prob = ax_prob.barh(prob_df['Вид'], prob_df['Вероятность (%)'], color=colors_prob)
+        ax_prob.set_xlabel('Вероятность (%)')
+        ax_prob.set_title('Распределение вероятностей')
+        ax_prob.set_xlim(0, 100)
+        
+        # Добавляем значения на столбцы
+        for bar, prob in zip(bars_prob, prob_df['Вероятность (%)']):
+            width = bar.get_width()
+            ax_prob.text(width + 1, bar.get_y() + bar.get_height()/2,
+                        f'{prob}%', va='center', fontsize=10, fontweight='bold')
+        
+        st.pyplot(fig_prob)
 
         st.subheader("Матрица ошибок (Confusion Matrix)")
         cm = confusion_matrix(y_test, y_pred)
@@ -508,29 +531,12 @@ elif page == " Классификация":
                     yticklabels=class_names)
         ax.set_xlabel('Предсказанные метки')
         ax.set_ylabel('Истинные метки')
-        ax.set_title(f'Матрица ошибок ({model_name})')
         st.pyplot(fig)
 
         st.subheader("Отчет классификации (Precision / Recall / F1)")
         report = classification_report(y_test, y_pred, output_dict=True)
         report_df = pd.DataFrame(report).transpose()
         st.dataframe(report_df, use_container_width=True)
-
-        # ---------- ДОБАВЛЕНО: Важность признаков для Random Forest ----------
-        if model_type == "Random Forest":
-            st.subheader("🌳 Важность признаков (Random Forest)")
-            feature_importance = pd.DataFrame({
-                "Признак": X.columns,
-                "Важность": model.feature_importances_
-            }).sort_values("Важность", ascending=False)
-            
-            fig_importance, ax_importance = plt.subplots(figsize=(8, 4))
-            ax_importance.barh(feature_importance["Признак"], feature_importance["Важность"])
-            ax_importance.set_xlabel("Важность признака")
-            ax_importance.set_title("Важность признаков (Random Forest)")
-            st.pyplot(fig_importance)
-            
-            st.dataframe(feature_importance.round(4), use_container_width=True)
 
         st.subheader("Визуализация правильных/ошибочных предсказаний (по признакам лепестка)")
         # Визуализация ошибок по оригинальным (не стандартизованным) значениям
@@ -555,7 +561,7 @@ elif page == " Классификация":
 
         ax.set_xlabel('Длина лепестка (cm)')
         ax.set_ylabel('Ширина лепестка (cm)')
-        ax.set_title(f'Результаты классификации ({model_name})')
+        ax.set_title('Результаты классификации (зелёные = правильно, красные = ошибки)')
         ax.legend()
         st.pyplot(fig)
 
@@ -585,57 +591,6 @@ elif page == " Метрики / Выводы":
     labels3 = kmeans3.fit_predict(X_full)
     sil3 = silhouette_score(X_full, labels3)
     st.markdown(f"**Кластеризация (KMeans, k=3)** — Silhouette: `{sil3:.3f}`")
-
-    # ---------- ДОБАВЛЕНО: Сравнение моделей классификации ----------
-    st.subheader("Сравнение моделей классификации")
-    
-    # Подготовка данных для сравнения
-    X_all = df_filtered.iloc[:, :4]
-    y_all = df_filtered['species']
-    scaler_full = StandardScaler()
-    X_all_scaled = scaler_full.fit_transform(X_all)
-    
-    # Разделение на train/test для сравнения
-    X_train_all, X_test_all, y_train_all, y_test_all = train_test_split(
-        X_all_scaled, y_all, test_size=0.2, random_state=42, stratify=y_all
-    )
-    
-    # Тестируем три модели
-    models_comparison = {
-        "Logistic Regression": LogisticRegression(random_state=42, max_iter=300),
-        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
-        "SVM": SVC(kernel='rbf', probability=True, random_state=42)
-    }
-    
-    comparison_results = []
-    for name, model in models_comparison.items():
-        model.fit(X_train_all, y_train_all)
-        y_pred_all = model.predict(X_test_all)
-        acc_all = accuracy_score(y_test_all, y_pred_all)
-        comparison_results.append({
-            "Модель": name,
-            "Accuracy": round(acc_all, 3),
-            "Train size": X_train_all.shape[0],
-            "Test size": X_test_all.shape[0]
-        })
-    
-    comparison_df = pd.DataFrame(comparison_results).sort_values("Accuracy", ascending=False)
-    st.dataframe(comparison_df, use_container_width=True)
-    
-    # Визуализация сравнения
-    fig_compare, ax_compare = plt.subplots(figsize=(8, 4))
-    bars = ax_compare.bar(comparison_df["Модель"], comparison_df["Accuracy"], color=['skyblue', 'lightgreen', 'lightcoral'])
-    ax_compare.set_ylabel("Accuracy")
-    ax_compare.set_title("Сравнение точности моделей (test_size=20%)")
-    ax_compare.set_ylim(0, 1.05)
-    
-    # Добавляем значения на столбцы
-    for bar, acc in zip(bars, comparison_df["Accuracy"]):
-        height = bar.get_height()
-        ax_compare.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                       f'{acc:.3f}', ha='center', va='bottom', fontsize=10)
-    
-    st.pyplot(fig_compare)
 
     # Классификация: тренировочный прогон на всем датасете (кросс-валидация не включена здесь,
     # но мы можем показать обученную модель на полном наборе и её важности признаков)
@@ -669,9 +624,8 @@ elif page == " Метрики / Выводы":
     **Рекомендации:**
     1. Для классификации достаточны признаки лепестков (petal length & petal width).  
     2. KMeans с k=3 соответствует биологической интуиции и даёт хорошую сегрегацию.  
-    3. **Все три модели показывают высокую точность** (93-100%) на датасете Iris.
-    4. Random Forest дополнительно предоставляет важность признаков для интерпретации.
-    5. Для более надёжной оценки стоит добавить кросс-валидацию.
+    3. Логистическая регрессия показывает высокую точность на Iris; для более надёжной оценки
+       стоит добавить кросс-валидацию.
     """)
 
 # ------------- Футер -------------
